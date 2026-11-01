@@ -4,11 +4,12 @@
   import { colorOf } from "../lib/colors";
   import { DAY_SHORT, fmtDay, fmtTime, today } from "../lib/dates";
   import { compareLabels, grouped, lastDone, nextUp, NEXT_STATUS, parseLabels, progress, STATUS_LABEL } from "../lib/sections";
-  import { letter, summarize } from "../lib/grades";
+  import { fmt, letter, summarize } from "../lib/grades";
   import { openUrl } from "../lib/platform";
   import DeadlineRow from "../components/DeadlineRow.svelte";
   import TodoRow from "../components/TodoRow.svelte";
   import Icon from "../components/Icon.svelte";
+  import GradeBar from "../components/GradeBar.svelte";
 
   let { course: c }: { course: Course } = $props();
 
@@ -76,20 +77,6 @@
   function applyRename() {
     if (menu && rename.trim()) menu.s.label = rename.trim();
   }
-
-  // ---------- grades ----------
-  let openCat = $state<string | null>(null);
-  const addCategory = () => {
-    const id = uid();
-    c.grades.push({ id, name: "New category", weight: 0, scores: [] });
-    openCat = id;
-  };
-  const weightTotal = $derived(c.grades.reduce((s, x) => s + (Number(x.weight) || 0), 0));
-  const catAvg = (cat: Course["grades"][number]) => {
-    const graded = cat.scores.filter((s) => s.earned !== null && s.total > 0);
-    const tot = graded.reduce((a, s) => a + s.total, 0);
-    return tot ? (graded.reduce((a, s) => a + (s.earned ?? 0), 0) / tot) * 100 : null;
-  };
 
   let newTask = $state("");
   const ring = $derived(2 * Math.PI * 34);
@@ -198,61 +185,37 @@
       <section class="panel">
         <div class="panel-head">
           <h2>Grades</h2>
-          <button class="btn sm" onclick={addCategory}><Icon name="plus" size={14} /> Category</button>
+          <button class="btn sm" onclick={() => go("grades", c.id)}><Icon name="grade" size={14} /> Gradebook</button>
         </div>
-        <div class="grade-top">
-          <div class="current">
-            <span class="g-letter">{letter(g.current)}</span>
-            <span class="mono">{g.current !== null ? `${g.current.toFixed(1)}%` : "No grades yet"}</span>
+        {#if !c.grades.length}
+          <div class="small faint">Set up the grade breakdown from your syllabus, enter scores, and see what you need on the final.</div>
+          <button class="btn sm primary setup-btn" onclick={() => go("grades", c.id)}>Set up grades</button>
+        {:else}
+          <div class="grade-top">
+            <div class="current">
+              <span class="g-letter">{letter(g.current, c)}</span>
+              <span class="mono">{g.current !== null ? fmt(g.current, 2) : "No grades yet"}</span>
+            </div>
+            <span class="small faint">earned {fmt((g.earned / (g.totalWeight || 100)) * 100)} of the course</span>
           </div>
-          <label class="target small">
-            Goal
-            <input class="field" type="number" min="0" max="100" bind:value={c.target} placeholder="90" />
-          </label>
-        </div>
-        {#if c.target && g.needed !== null}
-          <div class="needed small" class:hard={g.needed > 100} class:easy={g.needed <= 0}>
-            {#if g.needed > 100}You'd need {g.needed.toFixed(0)}% on the remaining {g.remainingWeight.toFixed(0)}% of the grade — {c.target}% is likely out of reach.
-            {:else if g.needed <= 0}You've already locked in {c.target}%. 🎉
-            {:else}To finish at {c.target}%, average <b>{g.needed.toFixed(1)}%</b> on the remaining {g.remainingWeight.toFixed(0)}% of the grade.{/if}
+          <GradeBar {g} legend={false} height={8} />
+          {#if c.target && g.needed !== null}
+            <div class="needed small" class:hard={g.needed > 100}>
+              {#if g.needed > 100}You'd need {fmt(g.needed, 0)} on the rest — {c.target}% is likely out of reach.
+              {:else if g.needed <= 0}You've already locked in {c.target}%. 🎉
+              {:else}To finish at {c.target}%, average <b>{fmt(g.needed)}</b> on the remaining {fmt((g.remaining / (g.totalWeight || 100)) * 100, 0)} of the grade.{/if}
+            </div>
+          {/if}
+          <div class="mini-cats">
+            {#each g.cats as r (r.cat.id)}
+              <button class="mini" onclick={() => go("grades", c.id)}>
+                <span class="grow">{r.cat.name}</span>
+                <span class="mono small faint">{fmt(r.avg, 0)}</span>
+                <span class="mono small"><b>{r.earned.toFixed(1).replace(/\.0$/, "")}</b><span class="faint"> / {r.weight}%</span></span>
+              </button>
+            {/each}
           </div>
         {/if}
-
-        {#each c.grades as cat (cat.id)}
-          {@const avg = catAvg(cat)}
-          <div class="cat">
-            <button class="cat-head" onclick={() => (openCat = openCat === cat.id ? null : cat.id)}>
-              <Icon name={openCat === cat.id ? "down" : "right"} size={14} />
-              <span class="grow">{cat.name}</span>
-              <span class="mono small faint">{cat.weight || 0}%</span>
-              <span class="mono small avg">{avg !== null ? `${avg.toFixed(0)}%` : "—"}</span>
-            </button>
-            {#if openCat === cat.id}
-              <div class="cat-body fade-in">
-                <div class="cat-edit">
-                  <input class="field" bind:value={cat.name} aria-label="Category name" />
-                  <label class="w"><input class="field" type="number" min="0" max="100" bind:value={cat.weight} aria-label="Weight" /><span class="faint small">% of grade</span></label>
-                  <button class="btn icon sm ghost danger" onclick={() => (c.grades = c.grades.filter((x) => x.id !== cat.id))} aria-label="Delete category"><Icon name="trash" size={14} /></button>
-                </div>
-                {#each cat.scores as s (s.id)}
-                  <div class="score">
-                    <input class="field" bind:value={s.name} aria-label="Item name" />
-                    <input class="field num" type="number" min="0" placeholder="—" value={s.earned ?? ""} oninput={(e) => (s.earned = e.currentTarget.value === "" ? null : Number(e.currentTarget.value))} aria-label="Points earned" />
-                    <span class="faint">/</span>
-                    <input class="field num" type="number" min="0" bind:value={s.total} aria-label="Points possible" />
-                    <button class="btn icon sm ghost" onclick={() => (cat.scores = cat.scores.filter((x) => x.id !== s.id))} aria-label="Remove"><Icon name="close" size={13} /></button>
-                  </div>
-                {/each}
-                <button class="btn sm ghost add-score" onclick={() => cat.scores.push({ id: uid(), name: `${cat.name.replace(/s$/, "")} ${cat.scores.length + 1}`, earned: null, total: cat.scores.at(-1)?.total ?? 100 })}>
-                  <Icon name="plus" size={13} /> Add item
-                </button>
-              </div>
-            {/if}
-          </div>
-        {:else}
-          <div class="small faint">Add categories like Homework 20%, Midterms 40%, Final 40% from your syllabus. Leave scores blank for work that isn't graded yet.</div>
-        {/each}
-        {#if c.grades.length && weightTotal !== 100}<div class="small warn-txt">Weights add up to {weightTotal}%, not 100%.</div>{/if}
       </section>
 
       <section class="panel">
@@ -327,26 +290,16 @@
   .review-txt { color: var(--review); }
   .meet { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 
-  .grade-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .grade-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
   .current { display: flex; align-items: baseline; gap: 10px; }
   .g-letter { font-family: var(--font-display); font-size: 44px; line-height: 1; }
-  .target { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
-  .target .field { width: 74px; height: 32px; }
-  .needed { padding: 10px 12px; border-radius: var(--r-sm); background: var(--accent-soft); margin-bottom: 10px; }
+  .needed { padding: 10px 12px; border-radius: var(--r-sm); background: var(--accent-soft); margin-top: 10px; }
   .needed.hard { background: var(--warn-soft); }
-  .cat { border-top: 1px solid var(--line); }
-  .cat-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 0; border: 0; background: none; cursor: pointer; text-align: left; }
+  .mini-cats { display: grid; margin-top: 10px; }
+  .mini { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border: 0; border-top: 1px solid var(--line); background: none; cursor: pointer; text-align: left; }
+  .mini b { font-weight: 600; color: var(--c); }
   .grow { flex: 1; font-weight: 500; }
-  .avg { width: 44px; text-align: right; }
-  .cat-body { display: grid; gap: 6px; padding: 0 0 12px 22px; }
-  .cat-edit { display: grid; grid-template-columns: 1fr 150px 28px; gap: 6px; align-items: center; margin-bottom: 4px; }
-  .cat-edit .w { display: flex; align-items: center; gap: 6px; }
-  .cat-edit .w .field { width: 64px; }
-  .score { display: grid; grid-template-columns: 1fr 64px 8px 64px 28px; gap: 6px; align-items: center; }
-  .field.num { text-align: right; font-family: var(--font-mono); font-size: 12.5px; }
-  .cat .field { height: 30px; }
-  .add-score { justify-self: start; }
-  .warn-txt { color: var(--warn); margin-top: 8px; }
+  .setup-btn { margin-top: 10px; }
   .notes { min-height: 120px; }
 
   .menu { position: fixed; z-index: 70; width: 230px; padding: 8px; display: grid; gap: 2px; --glass: 0.95; }

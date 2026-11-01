@@ -10,6 +10,7 @@
     { view: "today", label: "Today", icon: "today" },
     { view: "calendar", label: "Calendar", icon: "calendar" },
     { view: "courses", label: "Classes", icon: "courses" },
+    { view: "grades", label: "Grades", icon: "grade" },
     { view: "tasks", label: "Tasks", icon: "tasks" },
     { view: "focus", label: "Focus", icon: "focus" },
   ];
@@ -63,7 +64,7 @@
   <button class="btn primary add" onclick={() => (ui.quickAdd = true)}>
     <Icon name="plus" size={16} /> Quick add <span class="kbd on-accent">Ctrl K</span>
   </button>
-  <button class="nav" class:on={ui.view === "settings"} onclick={() => go("settings")} title="Settings (Ctrl+6)">
+  <button class="nav" class:on={ui.view === "settings"} onclick={() => go("settings")} title="Settings (Ctrl+7)">
     <Icon name="settings" />
     <span>Settings</span>
   </button>

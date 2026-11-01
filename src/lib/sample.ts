@@ -27,7 +27,7 @@ export function sampleData(base: AppData): AppData {
         { id: uid(), name: "HW 3", earned: 16, total: 20 }, { id: uid(), name: "HW 4", earned: null, total: 20 }] },
       { id: uid(), name: "Quizzes", weight: 15, scores: [{ id: uid(), name: "Quiz 1", earned: 9, total: 10 }, { id: uid(), name: "Quiz 2", earned: 7, total: 10 }] },
       { id: uid(), name: "Midterms", weight: 35, scores: [{ id: uid(), name: "Midterm 1", earned: 84, total: 100 }, { id: uid(), name: "Midterm 2", earned: null, total: 100 }] },
-      { id: uid(), name: "Final", weight: 30, scores: [] },
+      { id: uid(), name: "Final", weight: 30, scores: [], final: true },
     ],
     notes: "Office hours Tue 2–3pm, Math building 3rd floor.",
   };
@@ -41,9 +41,10 @@ export function sampleData(base: AppData): AppData {
     links: [{ id: uid(), label: "Gradescope", url: "https://www.gradescope.com" }],
     sections: [...secs("Week 1-12", 8), ...secs("Lab 1-8", 6)],
     grades: [
-      { id: uid(), name: "Projects", weight: 40, scores: [{ id: uid(), name: "P1", earned: 95, total: 100 }, { id: uid(), name: "P2", earned: 88, total: 100 }] },
-      { id: uid(), name: "Labs", weight: 20, scores: [{ id: uid(), name: "Labs 1–6", earned: 58, total: 60 }] },
-      { id: uid(), name: "Exams", weight: 40, scores: [{ id: uid(), name: "Midterm", earned: 81, total: 100 }] },
+      { id: uid(), name: "Projects", weight: 40, expected: 3, scores: [{ id: uid(), name: "P1", earned: 95, total: 100 }, { id: uid(), name: "P2", earned: 88, total: 100 }] },
+      { id: uid(), name: "Labs", weight: 20, best: 10, expected: 12, equal: true,
+        scores: [10, 9, 10, 4, 10, 8, 10].map((earned, i) => ({ id: uid(), name: `Lab ${i + 1}`, earned, total: 10 })) },
+      { id: uid(), name: "Exams", weight: 40, expected: 2, scores: [{ id: uid(), name: "Midterm", earned: 81, total: 100 }] },
     ],
   };
   const chem: Course = {

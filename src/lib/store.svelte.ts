@@ -51,7 +51,7 @@ export function normalize(raw: unknown): AppData {
 
 export const db: AppData = $state(emptyData());
 
-export type View = "today" | "calendar" | "courses" | "course" | "tasks" | "focus" | "settings";
+export type View = "today" | "calendar" | "courses" | "course" | "grades" | "tasks" | "focus" | "settings";
 
 export const ui = $state({
   ready: false,
@@ -95,7 +95,7 @@ export async function init() {
     if (q.get("scene")) db.settings.scene = q.get("scene") as AppData["settings"]["scene"];
     if (q.get("style")) db.settings.artStyle = q.get("style") as AppData["settings"]["artStyle"];
     if (q.get("view")) ui.view = q.get("view") as View;
-    if (q.get("course")) (ui.view = "course"), (ui.courseId = db.courses[Number(q.get("course"))]?.id ?? null);
+    if (q.get("course")) (ui.view = q.get("view") === "grades" ? "grades" : "course"), (ui.courseId = db.courses[Number(q.get("course"))]?.id ?? null);
   }
   ui.ready = true;
 

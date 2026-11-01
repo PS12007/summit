@@ -33,6 +33,7 @@ export interface Score {
   name: string;
   earned: number | null; // null = not graded yet
   total: number;
+  excused?: boolean; // left out of the grade entirely
 }
 
 export interface GradeCategory {
@@ -40,6 +41,15 @@ export interface GradeCategory {
   name: string; // Homework, Midterms…
   weight: number; // percent of final grade
   scores: Score[];
+  best?: number; // only the best N items count ("best 10 of 12 labs")
+  expected?: number; // how many items there will be in total, even if not entered yet
+  equal?: boolean; // every item counts the same, instead of by points
+  final?: boolean; // the final exam, used by the "what do I need on the final" calculator
+}
+
+export interface GradeCutoff {
+  letter: string;
+  min: number; // lowest percent for this letter
 }
 
 export interface Course {
@@ -53,6 +63,7 @@ export interface Course {
   sections: Section[];
   grades: GradeCategory[];
   target?: number; // goal grade, percent
+  scale?: GradeCutoff[]; // letter grade cutoffs; a default scale is used when missing
   notes?: string;
   archived?: boolean;
 }

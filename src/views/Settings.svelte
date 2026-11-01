@@ -151,7 +151,7 @@
     <div class="panel-head"><h2>Shortcuts</h2></div>
     <div class="kgrid small">
       <span><span class="kbd">Ctrl K</span> Quick add</span>
-      <span><span class="kbd">Ctrl 1–5</span> Switch pages</span>
+      <span><span class="kbd">Ctrl 1–6</span> Switch pages</span>
       <span><span class="kbd">Ctrl ,</span> Settings</span>
       <span><span class="kbd">← →</span> Move in calendar</span>
       <span><span class="kbd">Shift-click</span> Done through a section</span>

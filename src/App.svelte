@@ -9,6 +9,7 @@
   import Calendar from "./views/Calendar.svelte";
   import Courses from "./views/Courses.svelte";
   import CourseDetail from "./views/CourseDetail.svelte";
+  import Grades from "./views/Grades.svelte";
   import Tasks from "./views/Tasks.svelte";
   import Focus from "./views/Focus.svelte";
   import Settings from "./views/Settings.svelte";
@@ -16,6 +17,7 @@
   init();
 
   const course = $derived(ui.view === "course" ? courseById(ui.courseId) : undefined);
+  const gradeCourse = $derived(ui.view === "grades" ? courseById(ui.courseId) : undefined);
   let main: HTMLElement | undefined = $state();
 
   // Scroll back to the top when switching pages.
@@ -24,7 +26,7 @@
     main?.scrollTo({ top: 0 });
   });
 
-  const PAGES: View[] = ["today", "calendar", "courses", "tasks", "focus", "settings"];
+  const PAGES: View[] = ["today", "calendar", "courses", "grades", "tasks", "focus", "settings"];
   function onkey(e: KeyboardEvent) {
     if (!(e.ctrlKey || e.metaKey)) return;
     if (e.key.toLowerCase() === "k" || e.key.toLowerCase() === "n") {
@@ -33,7 +35,7 @@
     } else if (e.key === ",") {
       e.preventDefault();
       go("settings");
-    } else if (/^[1-6]$/.test(e.key)) {
+    } else if (/^[1-7]$/.test(e.key)) {
       e.preventDefault();
       go(PAGES[Number(e.key) - 1]);
     }
@@ -55,6 +57,7 @@
           {:else if ui.view === "courses"}<Courses />
           {:else if ui.view === "course" && course}<CourseDetail {course} />
           {:else if ui.view === "course"}<Courses />
+          {:else if ui.view === "grades"}<Grades course={gradeCourse} />
           {:else if ui.view === "tasks"}<Tasks />
           {:else if ui.view === "focus"}<Focus />
           {:else if ui.view === "settings"}<Settings />

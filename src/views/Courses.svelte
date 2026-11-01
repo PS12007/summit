@@ -50,7 +50,7 @@
         <div class="stats">
           <div><span class="big">{p.pct}<small>%</small></span><span class="eyebrow">sections</span></div>
           <div><span class="big mono-ish">{next?.label ?? (p.total ? "✓" : "—")}</span><span class="eyebrow">next up</span></div>
-          <div><span class="big">{g.current !== null ? letter(g.current) : "—"}</span><span class="eyebrow">grade</span></div>
+          <div><span class="big">{g.current !== null ? letter(g.current, c) : "—"}</span><span class="eyebrow">grade</span></div>
         </div>
         <div class="bar"><i style="width:{p.pct}%;background:var(--c)"></i></div>
         <div class="due small">
