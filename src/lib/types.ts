@@ -45,6 +45,7 @@ export interface GradeCategory {
   expected?: number; // how many items there will be in total, even if not entered yet
   equal?: boolean; // every item counts the same, instead of by points
   final?: boolean; // the final exam, used by the "what do I need on the final" calculator
+  toFinal?: boolean; // if you do better on the final than here, this weight moves to the final
 }
 
 export interface GradeCutoff {
