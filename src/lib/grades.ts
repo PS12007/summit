@@ -24,6 +24,8 @@ export interface CategoryResult {
   items: ItemResult[];
   missing: number; // items expected but not entered yet
   missingWorth: number; // worth of each of those
+  movedToFinal?: boolean; // this category's weight was moved to the final (you did better there)
+  movedIn?: number; // on the final: weight moved in from other categories
 }
 
 export interface GradeSummary {
@@ -95,8 +97,37 @@ export function categoryResult(cat: GradeCategory): CategoryResult {
   };
 }
 
+/** Categories whose weight can move to the final, if there is a final to move it to. */
+function movable(course: Course, f: GradeCategory | undefined): GradeCategory[] {
+  return f ? course.grades.filter((c) => c.toFinal && c.id !== f.id && num(c.weight) > 0) : [];
+}
+
+/** Category results with "move weight to the final" applied, once the final has a grade.
+ *  Never changes the course itself — the moved weights live only in the results. */
+function categoryResults(course: Course): CategoryResult[] {
+  const base = course.grades.map(categoryResult);
+  const f = finalCategory(course);
+  const finalAvg = base.find((r) => r.cat.id === f?.id)?.avg ?? null;
+  if (!f || finalAvg === null) return base;
+  const moved = new Set(
+    movable(course, f)
+      .filter((c) => {
+        const avg = base.find((r) => r.cat.id === c.id)!.avg;
+        return avg !== null && finalAvg > avg + 1e-9;
+      })
+      .map((c) => c.id),
+  );
+  if (!moved.size) return base;
+  const extra = course.grades.filter((c) => moved.has(c.id)).reduce((a, c) => a + num(c.weight), 0);
+  return course.grades.map((c) => {
+    if (moved.has(c.id)) return { ...categoryResult({ ...c, weight: 0 }), cat: c, movedToFinal: true };
+    if (c.id === f.id) return { ...categoryResult({ ...c, weight: num(c.weight) + extra }), cat: c, movedIn: extra };
+    return base.find((r) => r.cat.id === c.id)!;
+  });
+}
+
 export function summarize(course: Course): GradeSummary {
-  const cats = course.grades.map(categoryResult);
+  const cats = categoryResults(course);
   const totalWeight = cats.reduce((a, c) => a + c.weight, 0);
   const earned = cats.reduce((a, c) => a + c.earned, 0);
   const graded = cats.reduce((a, c) => a + c.graded, 0);
@@ -104,7 +135,7 @@ export function summarize(course: Course): GradeSummary {
   const T = totalWeight || 100;
   const current = graded > 0.0001 ? (earned / graded) * 100 : null;
   const target = num(course.target);
-  return {
+  const g: GradeSummary = {
     current, totalWeight, earned, graded, remaining, cats,
     lost: Math.max(0, graded - earned),
     min: (earned / T) * 100,
@@ -112,24 +143,65 @@ export function summarize(course: Course): GradeSummary {
     projected: current === null ? null : ((earned + (current / 100) * remaining) / T) * 100,
     needed: target > 0 && remaining > 0.0001 ? (((target / 100) * T - earned) / remaining) * 100 : null,
   };
+  // Best case: a perfect final can also pull weight over from other categories.
+  const f = finalCategory(course);
+  const fr = cats.find((r) => r.cat.id === f?.id);
+  if (f && fr && fr.remaining > 0.0001 && shiftsTo(course, f.id)) g.max = Math.max(g.max, finishWith(course, g, f.id, 100, 100));
+  return g;
 }
 
 /** Percent needed on one category (usually the final) to finish at `target`,
  *  assuming you average `assume`% on everything else that's left. */
-export function neededOn(g: GradeSummary, catId: string, target: number, assume: number): number | null {
+export function neededOn(course: Course, g: GradeSummary, catId: string, target: number, assume: number): number | null {
   const c = g.cats.find((x) => x.cat.id === catId);
   if (!c || c.remaining < 0.0001) return null;
-  const T = g.totalWeight || 100;
-  const other = g.remaining - c.remaining;
-  return (((target / 100) * T - g.earned - (assume / 100) * other) / c.remaining) * 100;
+  if (!shiftsTo(course, catId)) {
+    const T = g.totalWeight || 100;
+    const other = g.remaining - c.remaining;
+    return (((target / 100) * T - g.earned - (assume / 100) * other) / c.remaining) * 100;
+  }
+  // Weight can move onto the final, so the result isn't a straight line — search for it.
+  // finishWith only goes up as the final score goes up.
+  const at = (p: number) => finishWith(course, g, catId, p, assume);
+  if (at(0) >= target - 1e-9) return 0;
+  let lo = 0, hi = 1000;
+  if (at(hi) < target - 1e-9) return Infinity;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    at(mid) >= target - 1e-9 ? (hi = mid) : (lo = mid);
+  }
+  return hi;
 }
 
-/** Final course percent if you score `pct` on that category and `assume`% on the rest. */
-export function finishWith(g: GradeSummary, catId: string, pct: number, assume: number): number {
-  const c = g.cats.find((x) => x.cat.id === catId);
+/** True when some category's weight could move onto this one (it's the final). */
+function shiftsTo(course: Course, catId: string): boolean {
+  const f = finalCategory(course);
+  return f?.id === catId && movable(course, f).length > 0;
+}
+
+/** Final course percent if you score `pct` on that category and `assume`% on the rest.
+ *  If that's the final, categories set to "move to the final" hand their weight over
+ *  whenever the final ends up higher than their own average. */
+export function finishWith(course: Course, g: GradeSummary, catId: string, pct: number, assume: number): number {
   const T = g.totalWeight || 100;
-  const mine = c?.remaining ?? 0;
-  return ((g.earned + (pct / 100) * mine + (assume / 100) * (g.remaining - mine)) / T) * 100;
+  if (!shiftsTo(course, catId)) {
+    const c = g.cats.find((x) => x.cat.id === catId);
+    const mine = c?.remaining ?? 0;
+    return ((g.earned + (pct / 100) * mine + (assume / 100) * (g.remaining - mine)) / T) * 100;
+  }
+  const f = finalCategory(course)!;
+  const canMove = new Set(movable(course, f).map((c) => c.id));
+  const base = course.grades.map(categoryResult);
+  const fr = base.find((r) => r.cat.id === f.id)!;
+  const finalAvg = fr.weight > 0 ? ((fr.earned + (pct / 100) * fr.remaining) / fr.weight) * 100 : pct;
+  let total = 0, extra = 0;
+  for (const r of base) {
+    if (r === fr) continue;
+    const ends = r.earned + (assume / 100) * r.remaining; // what this category ends up giving
+    if (canMove.has(r.cat.id) && r.weight > 0 && finalAvg > (ends / r.weight) * 100 + 1e-9) extra += r.weight;
+    else total += ends;
+  }
+  return ((total + (finalAvg / 100) * (fr.weight + extra)) / T) * 100;
 }
 
 /** The category the final-exam calculator uses: one marked as final, else one named "final". */

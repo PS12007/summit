@@ -85,6 +85,7 @@
     if (f && withRemaining.some((x) => x.cat.id === f.id)) return f.id;
     return [...withRemaining].sort((a, b) => b.remaining - a.remaining)[0]?.cat.id ?? null;
   });
+  const markedFinal = $derived(c ? finalCategory(c) : undefined);
   const finalRes = $derived(g?.cats.find((x) => x.cat.id === finalId));
   const otherRemaining = $derived(g && finalRes ? g.remaining - finalRes.remaining : 0);
   let assumeInput = $state<number | undefined>(undefined);
@@ -102,7 +103,7 @@
     if (c.target && !cut.some((s) => Number(s.min) === Number(c!.target))) list.push({ label: "Goal", min: Number(c.target), goal: true });
     return list
       .sort((a, b) => b.min - a.min)
-      .map((r) => ({ ...r, need: neededOn(g, finalId, r.min, assume) }));
+      .map((r) => ({ ...r, need: neededOn(c!, g, finalId, r.min, assume) }));
   });
 
   // ---------- grading scale ----------
@@ -238,6 +239,8 @@
               <span class="cname">{cat.name}</span>
               {#if r.slots && Number(cat.best) > 0}<span class="tag">best {r.slots} of {r.items.filter((i) => i.status !== "excused").length + r.missing}</span>{/if}
               {#if cat.final}<span class="tag accent">final</span>{/if}
+              {#if r.movedToFinal}<span class="tag accent" title="You did better on the final, so this weight counts toward the final instead">moved to final</span>{/if}
+              {#if r.movedIn}<span class="tag accent" title="Weight moved here from categories you did worse in">+{fmt(r.movedIn, 2)} moved in</span>{/if}
               <span class="spacer"></span>
               <span class="mono small faint" title="Category average">{fmt(r.avg, 1)}</span>
               <span class="contrib mono small" title="Course-grade points earned out of this category's weight">
@@ -262,6 +265,9 @@
                 <div class="opts small">
                   <label><input type="checkbox" checked={!!cat.equal} onchange={(e) => (cat.equal = e.currentTarget.checked || undefined)} /> Every item counts equally <span class="faint">(otherwise by points)</span></label>
                   <label><input type="checkbox" checked={!!cat.final} onchange={(e) => (e.currentTarget.checked ? pickFinal(cat.id) : (cat.final = undefined))} /> This is the final exam</label>
+                  {#if markedFinal && markedFinal.id !== cat.id}
+                    <label title="Some classes let the final replace a lower score: if your {markedFinal.name.toLowerCase()} percent is higher than your average here, this {cat.weight}% counts toward the {markedFinal.name.toLowerCase()} instead"><input type="checkbox" checked={!!cat.toFinal} onchange={(e) => (cat.toFinal = e.currentTarget.checked || undefined)} /> Move this weight to the {markedFinal.name.toLowerCase()} if I do better on it</label>
+                  {/if}
                 </div>
 
                 {#if cat.scores.length}
@@ -364,6 +370,9 @@
             {#if otherRemaining > 0.0001}
               <div class="small faint assume-note">Assuming you average {assume}% on the other {fmt(ofCourse(otherRemaining))} still to come{assumeInput === undefined ? " (your current average)" : ""}.</div>
             {/if}
+            {#if markedFinal?.id === finalId && c.grades.some((x) => x.toFinal && x.id !== finalId)}
+              <div class="small faint assume-note">Counts {c.grades.filter((x) => x.toFinal && x.id !== finalId).map((x) => x.name).join(", ")} toward the final when you beat {c.grades.filter((x) => x.toFinal && x.id !== finalId).length === 1 ? "its" : "their"} average.</div>
+            {/if}
             <div class="need-table">
               {#each rows as row (row.label + row.min)}
                 {@const n = row.need}
@@ -380,7 +389,7 @@
               <span class="suffix"><input class="field num" type="number" min="0" max="150" step="any" placeholder="75" bind:value={ifScore} /><i>%</i></span>
               on the {finalRes.cat.name.toLowerCase()}, I finish with
               {#if ifScore !== undefined && ifScore !== null}
-                {@const f = finishWith(g, finalId, Number(ifScore), assume)}
+                {@const f = finishWith(c, g, finalId, Number(ifScore), assume)}
                 <b class="mono">{fmt(f, 2)}</b> <span class="tag accent">{letter(f, c)}</span>
               {:else}<span class="faint">…</span>{/if}
             </div>
